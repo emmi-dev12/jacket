@@ -10,12 +10,22 @@
   "scripts": {
     "start": "node src/cli.js"
   },
-  "keywords": ["ai", "3d", "openscad", "spatial", "cad", "3d-printing"],
+  "keywords": [
+    "ai",
+    "3d",
+    "openscad",
+    "spatial",
+    "cad",
+    "3d-printing"
+  ],
   "author": "",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/emmi-dev12/jacket.git"
   },
-  "dependencies": {}
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.104.1",
+    "dotenv": "^17.4.2"
+  }
 }
