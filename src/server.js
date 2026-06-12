@@ -4,6 +4,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { chat } from './adapters/index.js';
 import { compileToSTL } from './compiler.js';
+import { addEntry, getHistory } from './history.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -70,6 +71,9 @@ app.post('/api/generate', async (req, res) => {
     // Store for export
     if (sessionId) sessions.set(sessionId, { openscadCode, spec });
 
+    // Save to history
+    addEntry({ prompt: spec.description, spec, openscad: openscadCode });
+
     res.json({ openscad: openscadCode, preview: spec.shape_hint || 'box', sessionId });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -99,6 +103,10 @@ app.post('/api/export', async (req, res) => {
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
+});
+
+app.get('/api/history', (req, res) => {
+  res.json(getHistory());
 });
 
 export function startServer(port = 3141) {

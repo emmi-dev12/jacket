@@ -785,8 +785,23 @@ async function exportSTL() {
   }
 }
 
+// ── HISTORY ──
+async function loadHistory() {
+  try {
+    const res = await fetch('/api/history');
+    const items = await res.json();
+    const container = document.getElementById('chat-messages');
+    if (items.length === 0) return;
+    const div = document.createElement('div');
+    div.className = 'msg jacket';
+    div.textContent = `${items.length} object${items.length > 1 ? 's' : ''} in history. Last: ${items[0].spec?.name || 'unknown'}`;
+    container.appendChild(div);
+  } catch {}
+}
+
 // ── INIT ──
 initThree();
+loadHistory();
 </script>
 </body>
 </html>
