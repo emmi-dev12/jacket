@@ -1,16 +1,19 @@
 import Anthropic from '@anthropic-ai/sdk';
 import OpenAI from 'openai';
+import { loadSettings } from '../settings.js';
 
 const PROVIDERS = {
   claude: {
     label: 'Claude (Anthropic)',
     envKey: 'ANTHROPIC_API_KEY',
+    settingsKey: 'claude',
     models: ['claude-sonnet-4-6', 'claude-opus-4-7', 'claude-haiku-4-5-20251001'],
     defaultModel: 'claude-sonnet-4-6',
   },
   openai: {
     label: 'GPT-4o (OpenAI)',
     envKey: 'OPENAI_API_KEY',
+    settingsKey: 'openai',
     models: ['gpt-4o', 'gpt-4o-mini', 'o3'],
     defaultModel: 'gpt-4o',
     baseURL: 'https://api.openai.com/v1',
@@ -18,9 +21,18 @@ const PROVIDERS = {
   grok: {
     label: 'Grok (xAI)',
     envKey: 'XAI_API_KEY',
+    settingsKey: 'grok',
     models: ['grok-4', 'grok-3', 'grok-3-mini'],
     defaultModel: 'grok-4',
     baseURL: 'https://api.x.ai/v1',
+  },
+  deepseek: {
+    label: 'DeepSeek',
+    envKey: 'DEEPSEEK_API_KEY',
+    settingsKey: 'deepseek',
+    models: ['deepseek-chat', 'deepseek-reasoner'],
+    defaultModel: 'deepseek-chat',
+    baseURL: 'https://api.deepseek.com/v1',
   },
 };
 
@@ -28,8 +40,10 @@ function buildClient(provider) {
   const cfg = PROVIDERS[provider];
   if (!cfg) throw new Error(`Unknown provider: ${provider}`);
 
-  const apiKey = process.env[cfg.envKey];
-  if (!apiKey) throw new Error(`Missing ${cfg.envKey} — add it to your .env file`);
+  // API key: settings file takes precedence over env
+  const settings = loadSettings();
+  const apiKey = settings.apiKeys?.[cfg.settingsKey] || process.env[cfg.envKey];
+  if (!apiKey) throw new Error(`Missing API key for ${cfg.label} — add it via \`jacket\` settings or set ${cfg.envKey} in .env`);
 
   if (provider === 'claude') {
     return { type: 'anthropic', client: new Anthropic({ apiKey }) };
