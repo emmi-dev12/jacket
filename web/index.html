@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JACKET — Spatial Intelligence Layer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --black: #080808;
+    --surface: #111111;
+    --border: #222222;
+    --yellow: #F5C400;
+    --yellow-dim: #F5C40022;
+    --white: #F0EDE8;
+    --muted: #555555;
+    --danger: #FF4444;
+  }
+
+  html, body {
+    height: 100%;
+    background: var(--black);
+    color: var(--white);
+    font-family: 'JetBrains Mono', monospace;
+    overflow: hidden;
+    cursor: crosshair;
+  }
+
+  /* ── SCAN LINE OVERLAY ── */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.03) 2px,
+      rgba(0,0,0,0.03) 4px
+    );
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  /* ── LAYOUT ── */
+  .app {
+    display: grid;
+    grid-template-columns: 380px 1fr;
+    grid-template-rows: 56px 1fr;
+    height: 100vh;
+  }
+
+  /* ── TOPBAR ── */
+  .topbar {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 24px;
+    border-bottom: 1px solid var(--border);
+    background: var(--black);
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .logo-mark {
+    width: 28px;
+    height: 28px;
+  }
+
+  .logo-text {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 16px;
+    letter-spacing: 0.2em;
+    color: var(--yellow);
+  }
+
+  .logo-sub {
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+  }
+
+  .topbar-right {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+
+  .status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--yellow);
+    box-shadow: 0 0 8px var(--yellow);
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  .topbar-label {
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+  }
+
+  /* ── LEFT PANEL ── */
+  .panel-left {
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .section {
+    border-bottom: 1px solid var(--border);
+    padding: 20px;
+  }
+
+  .section-label {
+    font-size: 9px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 14px;
+  }
+
+  /* ── PROVIDER SELECT ── */
+  .provider-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 6px;
+  }
+
+  .provider-btn {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.05em;
+    padding: 8px 6px;
+    cursor: pointer;
+    transition: all 0.1s;
+    text-align: center;
+  }
+
+  .provider-btn:hover {
+    border-color: var(--yellow);
+    color: var(--white);
+  }
+
+  .provider-btn.active {
+    background: var(--yellow-dim);
+    border-color: var(--yellow);
+    color: var(--yellow);
+  }
+
+  .provider-btn .provider-icon {
+    font-size: 14px;
+    display: block;
+    margin-bottom: 4px;
+  }
+
+  /* ── INPUT ── */
+  .input-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 20px;
+    gap: 12px;
+  }
+
+  .input-area textarea {
+    flex: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--white);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    padding: 14px;
+    resize: none;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+
+  .input-area textarea:focus {
+    border-color: var(--yellow);
+  }
+
+  .input-area textarea::placeholder {
+    color: var(--muted);
+  }
+
+  .generate-btn {
+    background: var(--yellow);
+    border: none;
+    color: var(--black);
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 12px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    padding: 14px;
+    cursor: pointer;
+    transition: all 0.1s;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .generate-btn::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: rgba(255,255,255,0);
+    transition: background 0.1s;
+  }
+
+  .generate-btn:hover::after {
+    background: rgba(255,255,255,0.1);
+  }
+
+  .generate-btn:active {
+    transform: translateY(1px);
+  }
+
+  /* ── CHAT ── */
+  .chat-section {
+    flex: 0 0 220px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 14px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .chat-messages::-webkit-scrollbar { width: 2px; }
+  .chat-messages::-webkit-scrollbar-track { background: transparent; }
+  .chat-messages::-webkit-scrollbar-thumb { background: var(--border); }
+
+  .msg {
+    font-size: 12px;
+    line-height: 1.5;
+    max-width: 100%;
+  }
+
+  .msg.jacket {
+    color: var(--yellow);
+  }
+
+  .msg.jacket::before {
+    content: 'JACKET › ';
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    opacity: 0.6;
+  }
+
+  .msg.user {
+    color: var(--white);
+    opacity: 0.7;
+  }
+
+  .msg.user::before {
+    content: 'YOU › ';
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    opacity: 0.6;
+    color: var(--muted);
+  }
+
+  .chat-input-row {
+    display: flex;
+    border-top: 1px solid var(--border);
+  }
+
+  .chat-input-row input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: var(--white);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    padding: 12px 16px;
+    outline: none;
+  }
+
+  .chat-input-row input::placeholder { color: var(--muted); }
+
+  .chat-send {
+    background: transparent;
+    border: none;
+    border-left: 1px solid var(--border);
+    color: var(--yellow);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    padding: 0 16px;
+    cursor: pointer;
+    letter-spacing: 0.1em;
+  }
+
+  .chat-send:hover { background: var(--yellow-dim); }
+
+  /* ── RIGHT PANEL (3D) ── */
+  .panel-right {
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    overflow: hidden;
+  }
+
+  #canvas-container {
+    flex: 1;
+    position: relative;
+    background: var(--black);
+  }
+
+  #canvas-container canvas {
+    display: block;
+    width: 100% !important;
+    height: 100% !important;
+  }
+
+  /* Corner decorations */
+  .corner {
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    z-index: 10;
+  }
+
+  .corner.tl { top: 16px; left: 16px; border-top: 1px solid var(--yellow); border-left: 1px solid var(--yellow); }
+  .corner.tr { top: 16px; right: 16px; border-top: 1px solid var(--yellow); border-right: 1px solid var(--yellow); }
+  .corner.bl { bottom: 16px; left: 16px; border-bottom: 1px solid var(--yellow); border-left: 1px solid var(--yellow); }
+  .corner.br { bottom: 16px; right: 16px; border-bottom: 1px solid var(--yellow); border-right: 1px solid var(--yellow); }
+
+  .canvas-label {
+    position: absolute;
+    top: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 9px;
+    letter-spacing: 0.25em;
+    color: var(--muted);
+    text-transform: uppercase;
+    z-index: 10;
+  }
+
+  /* ── BOTTOM BAR ── */
+  .bottom-bar {
+    border-top: 1px solid var(--border);
+    padding: 12px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--surface);
+  }
+
+  .spec-display {
+    font-size: 11px;
+    color: var(--muted);
+    display: flex;
+    gap: 20px;
+  }
+
+  .spec-item span {
+    color: var(--yellow);
+  }
+
+  .export-btn {
+    background: transparent;
+    border: 1px solid var(--yellow);
+    color: var(--yellow);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    padding: 8px 20px;
+    cursor: pointer;
+    transition: all 0.1s;
+    opacity: 0.4;
+    pointer-events: none;
+  }
+
+  .export-btn.ready {
+    opacity: 1;
+    pointer-events: all;
+  }
+
+  .export-btn.ready:hover {
+    background: var(--yellow);
+    color: var(--black);
+  }
+
+  /* ── LOADING STATE ── */
+  .loading-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(8,8,8,0.85);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    z-index: 20;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s;
+  }
+
+  .loading-overlay.visible {
+    opacity: 1;
+    pointer-events: all;
+  }
+
+  .loading-spinner {
+    width: 40px;
+    height: 40px;
+    border: 1px solid var(--border);
+    border-top-color: var(--yellow);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .loading-text {
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    color: var(--muted);
+    text-transform: uppercase;
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- TOPBAR -->
+  <header class="topbar">
+    <div class="logo">
+      <!-- Geometric yellowjacket wasp mark -->
+      <svg class="logo-mark" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <polygon points="14,2 22,7 22,21 14,26 6,21 6,7" fill="none" stroke="#F5C400" stroke-width="1"/>
+        <line x1="6" y1="11" x2="22" y2="11" stroke="#F5C400" stroke-width="0.8" opacity="0.5"/>
+        <line x1="6" y1="17" x2="22" y2="17" stroke="#F5C400" stroke-width="0.8" opacity="0.5"/>
+        <polygon points="14,6 18,9 18,19 14,22 10,19 10,9" fill="#F5C40018"/>
+        <circle cx="14" cy="14" r="2" fill="#F5C400"/>
+        <line x1="14" y1="2" x2="14" y2="6" stroke="#F5C400" stroke-width="1.2"/>
+        <line x1="14" y1="22" x2="14" y2="26" stroke="#F5C400" stroke-width="1.2"/>
+      </svg>
+      <div>
+        <div class="logo-text">JACKET</div>
+        <div class="logo-sub">Spatial Intelligence Layer</div>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <div class="status-dot"></div>
+      <span class="topbar-label">STUDIO v0.1</span>
+    </div>
+  </header>
+
+  <!-- LEFT PANEL -->
+  <aside class="panel-left">
+
+    <!-- Provider selector -->
+    <div class="section">
+      <div class="section-label">AI Model</div>
+      <div class="provider-grid">
+        <button class="provider-btn active" data-provider="claude" onclick="selectProvider(this)">
+          <span class="provider-icon">◆</span>Claude
+        </button>
+        <button class="provider-btn" data-provider="openai" onclick="selectProvider(this)">
+          <span class="provider-icon">○</span>GPT-4o
+        </button>
+        <button class="provider-btn" data-provider="grok" onclick="selectProvider(this)">
+          <span class="provider-icon">✕</span>Grok
+        </button>
+      </div>
+    </div>
+
+    <!-- Input -->
+    <div class="input-area">
+      <div class="section-label">Describe your object</div>
+      <textarea
+        id="prompt-input"
+        placeholder="a wall-mounted phone holder for iPhone 16, charging hole at the bottom, clean minimal design..."
+      ></textarea>
+      <button class="generate-btn" onclick="startGenerate()">
+        ZIP UP JACKET →
+      </button>
+    </div>
+
+    <!-- Chat / clarification -->
+    <div class="chat-section">
+      <div class="section" style="padding: 12px 20px;">
+        <div class="section-label">Clarification</div>
+      </div>
+      <div class="chat-messages" id="chat-messages">
+        <div class="msg jacket">Ready. Describe what you want to print.</div>
+      </div>
+      <div class="chat-input-row">
+        <input type="text" id="chat-input" placeholder="reply to jacket..." onkeydown="handleChatKey(event)"/>
+        <button class="chat-send" onclick="sendChat()">SEND</button>
+      </div>
+    </div>
+
+  </aside>
+
+  <!-- RIGHT PANEL -->
+  <main class="panel-right">
+    <div id="canvas-container">
+      <div class="corner tl"></div>
+      <div class="corner tr"></div>
+      <div class="corner bl"></div>
+      <div class="corner br"></div>
+      <div class="canvas-label">3D PREVIEW</div>
+
+      <div class="loading-overlay" id="loading">
+        <div class="loading-spinner"></div>
+        <div class="loading-text" id="loading-text">Interpreting...</div>
+      </div>
+    </div>
+
+    <div class="bottom-bar">
+      <div class="spec-display" id="spec-display">
+        <div class="spec-item">OBJECT <span id="spec-name">—</span></div>
+        <div class="spec-item">SIZE <span id="spec-dims">—</span></div>
+        <div class="spec-item">MATERIAL <span id="spec-mat">—</span></div>
+      </div>
+      <button class="export-btn" id="export-btn" onclick="exportSTL()">EXPORT STL</button>
+    </div>
+  </main>
+
+</div>
+
+<script>
+// ── STATE ──
+let activeProvider = 'claude';
+let chatHistory = [];
+let currentSpec = null;
+let threeScene = null;
+
+// ── PROVIDER SELECTION ──
+function selectProvider(btn) {
+  document.querySelectorAll('.provider-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  activeProvider = btn.dataset.provider;
+}
+
+// ── THREE.JS SCENE ──
+function initThree() {
+  const container = document.getElementById('canvas-container');
+  const w = container.clientWidth;
+  const h = container.clientHeight;
+
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer.setSize(w, h);
+  renderer.setPixelRatio(window.devicePixelRatio);
+  renderer.setClearColor(0x080808, 1);
+  container.appendChild(renderer.domElement);
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(45, w / h, 0.1, 1000);
+  camera.position.set(3, 2, 4);
+  camera.lookAt(0, 0, 0);
+
+  // Grid
+  const grid = new THREE.GridHelper(10, 20, 0x1a1a1a, 0x151515);
+  scene.add(grid);
+
+  // Lights
+  scene.add(new THREE.AmbientLight(0xffffff, 0.3));
+  const key = new THREE.DirectionalLight(0xF5C400, 0.8);
+  key.position.set(5, 8, 5);
+  scene.add(key);
+  const fill = new THREE.DirectionalLight(0xffffff, 0.2);
+  fill.position.set(-5, 3, -5);
+  scene.add(fill);
+
+  // Default placeholder geometry
+  const geo = new THREE.TorusKnotGeometry(0.8, 0.25, 100, 16);
+  const mat = new THREE.MeshStandardMaterial({
+    color: 0x1a1a1a,
+    wireframe: false,
+    metalness: 0.3,
+    roughness: 0.7,
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+
+  // Wireframe overlay
+  const wireMat = new THREE.MeshBasicMaterial({ color: 0xF5C400, wireframe: true, opacity: 0.08, transparent: true });
+  const wireMesh = new THREE.Mesh(geo, wireMat);
+  scene.add(mesh);
+  scene.add(wireMesh);
+
+  threeScene = { renderer, scene, camera, mesh, wireMesh };
+
+  // Mouse rotate
+  let isDragging = false, prevX = 0, prevY = 0;
+  renderer.domElement.addEventListener('mousedown', e => { isDragging = true; prevX = e.clientX; prevY = e.clientY; });
+  window.addEventListener('mousemove', e => {
+    if (!isDragging) return;
+    mesh.rotation.y += (e.clientX - prevX) * 0.01;
+    mesh.rotation.x += (e.clientY - prevY) * 0.01;
+    wireMesh.rotation.copy(mesh.rotation);
+    prevX = e.clientX; prevY = e.clientY;
+  });
+  window.addEventListener('mouseup', () => isDragging = false);
+
+  window.addEventListener('resize', () => {
+    const w2 = container.clientWidth, h2 = container.clientHeight;
+    renderer.setSize(w2, h2);
+    camera.aspect = w2 / h2;
+    camera.updateProjectionMatrix();
+  });
+
+  function animate() {
+    requestAnimationFrame(animate);
+    if (!isDragging) {
+      mesh.rotation.y += 0.003;
+      wireMesh.rotation.y += 0.003;
+    }
+    renderer.render(scene, camera);
+  }
+  animate();
+}
+
+// ── CHAT ──
+function addMessage(role, text) {
+  const container = document.getElementById('chat-messages');
+  const div = document.createElement('div');
+  div.className = `msg ${role}`;
+  div.textContent = text;
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+}
+
+function handleChatKey(e) {
+  if (e.key === 'Enter') sendChat();
+}
+
+async function sendChat() {
+  const input = document.getElementById('chat-input');
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+  addMessage('user', text);
+  chatHistory.push({ role: 'user', content: text });
+  await callInterpreter();
+}
+
+async function startGenerate() {
+  const prompt = document.getElementById('prompt-input').value.trim();
+  if (!prompt) return;
+  chatHistory = [{ role: 'user', content: prompt }];
+  addMessage('user', prompt);
+  setLoading(true, 'Interpreting...');
+  await callInterpreter();
+}
+
+async function callInterpreter() {
+  try {
+    const res = await fetch('/api/interpret', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ provider: activeProvider, messages: chatHistory }),
+    });
+    const data = await res.json();
+    setLoading(false);
+
+    if (data.spec) {
+      currentSpec = data.spec;
+      updateSpec(data.spec);
+      addMessage('jacket', `Got it. Generating geometry for: ${data.spec.name}`);
+      document.getElementById('export-btn').classList.add('ready');
+      setLoading(true, 'Generating geometry...');
+      await generateGeometry(data.spec);
+    } else {
+      addMessage('jacket', data.reply);
+      chatHistory.push({ role: 'assistant', content: data.reply });
+    }
+  } catch (e) {
+    setLoading(false);
+    addMessage('jacket', `Error: ${e.message}`);
+  }
+}
+
+async function generateGeometry(spec) {
+  try {
+    const res = await fetch('/api/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ provider: activeProvider, spec }),
+    });
+    const data = await res.json();
+    setLoading(false);
+    if (data.preview) updatePreview(data.preview);
+    addMessage('jacket', 'Done. STL ready to export.');
+  } catch (e) {
+    setLoading(false);
+    addMessage('jacket', `Geometry error: ${e.message}`);
+  }
+}
+
+function updateSpec(spec) {
+  document.getElementById('spec-name').textContent = spec.name || '—';
+  document.getElementById('spec-dims').textContent = spec.dimensions || '—';
+  document.getElementById('spec-mat').textContent = spec.material_hint || '—';
+}
+
+function updatePreview(shapeType) {
+  if (!threeScene) return;
+  const { scene, mesh, wireMesh } = threeScene;
+  scene.remove(mesh); scene.remove(wireMesh);
+
+  let geo;
+  if (shapeType === 'cylinder') geo = new THREE.CylinderGeometry(1, 1, 2, 32);
+  else if (shapeType === 'sphere') geo = new THREE.SphereGeometry(1, 32, 32);
+  else if (shapeType === 'box') geo = new THREE.BoxGeometry(2, 1.5, 1);
+  else geo = new THREE.BoxGeometry(1.5, 2, 1); // default to box
+
+  const mat = new THREE.MeshStandardMaterial({ color: 0x1e1e1e, metalness: 0.3, roughness: 0.7 });
+  const wireMat = new THREE.MeshBasicMaterial({ color: 0xF5C400, wireframe: true, opacity: 0.12, transparent: true });
+  const newMesh = new THREE.Mesh(geo, mat);
+  const newWire = new THREE.Mesh(geo, wireMat);
+  scene.add(newMesh); scene.add(newWire);
+  threeScene.mesh = newMesh; threeScene.wireMesh = newWire;
+}
+
+function setLoading(visible, text = '') {
+  const overlay = document.getElementById('loading');
+  const textEl = document.getElementById('loading-text');
+  overlay.classList.toggle('visible', visible);
+  if (text) textEl.textContent = text;
+}
+
+function exportSTL() {
+  if (!currentSpec) return;
+  fetch('/api/export', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ spec: currentSpec }),
+  })
+  .then(r => r.blob())
+  .then(blob => {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${(currentSpec.name || 'jacket-object').replace(/\s+/g, '-')}.stl`;
+    a.click();
+  });
+}
+
+// ── INIT ──
+initThree();
+</script>
+</body>
+</html>
