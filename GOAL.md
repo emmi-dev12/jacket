@@ -17,6 +17,14 @@ A person who bought a 3D printer but can't design anything opens Jacket, types w
 - Not another text-to-mesh model that produces unusable blobs
 - Not locked to one AI provider
 
+## Core principle: Jacket has to be zipped up
+
+Jacket doesn't zip itself up when you put it on. You have to zip it up.
+
+It never acts without permission. Before it installs anything, changes anything, or generates anything consequential — it tells you what it's about to do, why, and links you to verify. Then it waits. You decide.
+
+This isn't just UX. It's the brand. Jacket respects your machine, your time, and your trust. That's what makes people recommend it.
+
 ## Why it wins
 
 The moat is the jacket itself: the spatial world model, the constraints engine, the geometry translation layer. Anyone can wrap an API. Nobody has built the layer underneath.

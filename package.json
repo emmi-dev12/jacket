@@ -1,0 +1,21 @@
+{
+  "name": "jacket-ai",
+  "version": "0.1.0",
+  "description": "The spatial reasoning layer AI never had.",
+  "type": "module",
+  "main": "src/index.js",
+  "bin": {
+    "jacket": "./src/cli.js"
+  },
+  "scripts": {
+    "start": "node src/cli.js"
+  },
+  "keywords": ["ai", "3d", "openscad", "spatial", "cad", "3d-printing"],
+  "author": "",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/emmi-dev12/jacket.git"
+  },
+  "dependencies": {}
+}
