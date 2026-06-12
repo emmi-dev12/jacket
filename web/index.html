@@ -558,6 +558,8 @@
 let activeProvider = 'claude';
 let chatHistory = [];
 let currentSpec = null;
+let currentOpenSCAD = null;
+let currentSessionId = null;
 let threeScene = null;
 
 // ── PROVIDER SELECTION ──
@@ -690,9 +692,9 @@ async function callInterpreter() {
 
     if (data.spec) {
       currentSpec = data.spec;
+      currentSessionId = crypto.randomUUID();
       updateSpec(data.spec);
       addMessage('jacket', `Got it. Generating geometry for: ${data.spec.name}`);
-      document.getElementById('export-btn').classList.add('ready');
       setLoading(true, 'Generating geometry...');
       await generateGeometry(data.spec);
     } else {
@@ -710,11 +712,13 @@ async function generateGeometry(spec) {
     const res = await fetch('/api/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ provider: activeProvider, spec }),
+      body: JSON.stringify({ provider: activeProvider, spec, sessionId: currentSessionId }),
     });
     const data = await res.json();
     setLoading(false);
+    if (data.openscad) currentOpenSCAD = data.openscad;
     if (data.preview) updatePreview(data.preview);
+    document.getElementById('export-btn').classList.add('ready');
     addMessage('jacket', 'Done. STL ready to export.');
   } catch (e) {
     setLoading(false);
@@ -754,20 +758,31 @@ function setLoading(visible, text = '') {
   if (text) textEl.textContent = text;
 }
 
-function exportSTL() {
-  if (!currentSpec) return;
-  fetch('/api/export', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ spec: currentSpec }),
-  })
-  .then(r => r.blob())
-  .then(blob => {
+async function exportSTL() {
+  if (!currentOpenSCAD && !currentSessionId) return;
+  addMessage('jacket', 'Compiling STL — this takes a few seconds...');
+  setLoading(true, 'Compiling STL...');
+  try {
+    const res = await fetch('/api/export', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ openscad: currentOpenSCAD, sessionId: currentSessionId, spec: currentSpec }),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error);
+    }
+    const blob = await res.blob();
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `${(currentSpec.name || 'jacket-object').replace(/\s+/g, '-')}.stl`;
+    a.download = `${(currentSpec?.name || 'jacket-object').replace(/\s+/g, '-').toLowerCase()}.stl`;
     a.click();
-  });
+    addMessage('jacket', 'Exported. Open in your slicer and print.');
+  } catch (e) {
+    addMessage('jacket', `Export failed: ${e.message}`);
+  } finally {
+    setLoading(false);
+  }
 }
 
 // ── INIT ──
