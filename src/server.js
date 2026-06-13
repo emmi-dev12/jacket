@@ -7,12 +7,10 @@ import { compileToSTL } from './compiler.js';
 import { addEntry, getHistory } from './history.js';
 import { loadSettings, saveSettings } from './settings.js';
 import { buildMemoryContext, learnFromSession, loadMemory, saveMemory } from './memory.js';
-import { buildAuthURL, exchangeCode, isGrokOAuthConnected, disconnectGrokOAuth } from './grok-oauth.js';
-import { createRequire } from 'module';
-const require = createRequire(import.meta.url);
+import { runOAuthFlow, isGrokOAuthConnected, disconnectGrokOAuth } from './grok-oauth.js';
 
-// In-memory OAuth state (verifier + state, keyed by state param)
-const oauthStates = new Map();
+// In-flight OAuth flow: only one at a time
+let activeOAuthFlow = null;
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -116,31 +114,15 @@ app.post('/api/learn', async (req, res) => {
 });
 
 // ── GROK OAUTH ──
-app.get('/api/grok/oauth/start', (req, res) => {
-  const port = req.socket.localPort || 3141;
+app.get('/api/grok/oauth/start', async (req, res) => {
   try {
-    const { url, verifier, state, redirectUri } = buildAuthURL(port);
-    oauthStates.set(state, { verifier, redirectUri });
-    // Clean up stale states after 10 min
-    setTimeout(() => oauthStates.delete(state), 10 * 60 * 1000);
-    res.json({ url });
+    const { authURL, callbackPromise } = await runOAuthFlow();
+    activeOAuthFlow = callbackPromise
+      .then(() => { activeOAuthFlow = null; })
+      .catch(() => { activeOAuthFlow = null; });
+    res.json({ url: authURL });
   } catch (e) {
     res.status(400).json({ error: e.message });
-  }
-});
-
-app.get('/auth/grok/callback', async (req, res) => {
-  const { code, state, error } = req.query;
-  if (error) return res.send(callbackPage('error', `xAI denied access: ${error}`));
-  if (!code || !state || !oauthStates.has(state)) return res.send(callbackPage('error', 'Invalid OAuth state. Try connecting again.'));
-
-  const { verifier, redirectUri } = oauthStates.get(state);
-  oauthStates.delete(state);
-  try {
-    await exchangeCode({ code, verifier, redirectUri });
-    res.send(callbackPage('success', 'SuperGrok connected. You can close this tab.'));
-  } catch (e) {
-    res.send(callbackPage('error', e.message));
   }
 });
 
@@ -152,16 +134,6 @@ app.post('/api/grok/oauth/disconnect', (req, res) => {
   disconnectGrokOAuth();
   res.json({ ok: true });
 });
-
-function callbackPage(status, message) {
-  const color = status === 'success' ? '#F5C400' : '#FF4444';
-  const icon = status === 'success' ? '◆' : '✕';
-  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Jacket — Grok Auth</title>
-<style>body{background:#080808;color:#F0EDE8;font-family:monospace;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;flex-direction:column;gap:16px}
-.mark{font-size:40px;color:${color}}.title{font-size:14px;letter-spacing:.2em;color:${color}}.msg{font-size:12px;color:#555;max-width:360px;text-align:center;line-height:1.6}</style></head>
-<body><div class="mark">${icon}</div><div class="title">JACKET</div><div class="msg">${message}</div>
-<script>if("${status}"==="success"){setTimeout(()=>window.close(),2000)}</script></body></html>`;
-}
 
 app.get('/api/history', (req, res) => res.json(getHistory()));
 app.get('/api/settings', (req, res) => res.json(loadSettings()));
