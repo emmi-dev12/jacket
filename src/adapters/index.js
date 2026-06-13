@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import OpenAI from 'openai';
 import { loadSettings } from '../settings.js';
+import { getValidAccessToken } from '../grok-oauth.js';
 
 const PROVIDERS = {
   claude: {
@@ -36,23 +37,42 @@ const PROVIDERS = {
   },
 };
 
-function buildClient(provider) {
+async function buildClient(provider) {
   const cfg = PROVIDERS[provider];
   if (!cfg) throw new Error(`Unknown provider: ${provider}`);
 
-  // API key: settings file takes precedence over env
-  const settings = loadSettings();
-  const apiKey = settings.apiKeys?.[cfg.settingsKey] || process.env[cfg.envKey];
-  if (!apiKey) throw new Error(`Missing API key for ${cfg.label} — add it via \`jacket\` settings or set ${cfg.envKey} in .env`);
-
   if (provider === 'claude') {
+    const settings = loadSettings();
+    const apiKey = settings.apiKeys?.claude || process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) throw new Error('Missing Anthropic API key — add it in Settings');
     return { type: 'anthropic', client: new Anthropic({ apiKey }) };
   }
+
+  if (provider === 'grok') {
+    // OAuth takes priority — uses user's SuperGrok/X Premium+ subscription
+    const oauthToken = await getValidAccessToken();
+    if (oauthToken) {
+      return {
+        type: 'openai',
+        client: new OpenAI({ apiKey: oauthToken, baseURL: 'https://api.x.ai/v1' }),
+      };
+    }
+    // Fall back to API key
+    const settings = loadSettings();
+    const apiKey = settings.apiKeys?.grok || process.env.XAI_API_KEY;
+    if (!apiKey) throw new Error('Grok not connected — use "Connect SuperGrok" in Settings or add XAI_API_KEY');
+    return { type: 'openai', client: new OpenAI({ apiKey, baseURL: 'https://api.x.ai/v1' }) };
+  }
+
+  // OpenAI / DeepSeek — API key only
+  const settings = loadSettings();
+  const apiKey = settings.apiKeys?.[cfg.settingsKey] || process.env[cfg.envKey];
+  if (!apiKey) throw new Error(`Missing API key for ${cfg.label} — add it in Settings or set ${cfg.envKey} in .env`);
   return { type: 'openai', client: new OpenAI({ apiKey, baseURL: cfg.baseURL }) };
 }
 
 export async function chat({ provider = 'claude', model, system, messages }) {
-  const { type, client } = buildClient(provider);
+  const { type, client } = await buildClient(provider);
   const cfg = PROVIDERS[provider];
   const resolvedModel = model || cfg.defaultModel;
 

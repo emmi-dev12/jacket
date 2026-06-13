@@ -273,8 +273,23 @@ body::after { content: ''; position: fixed; inset: 0; background: repeating-line
       <div class="settings-section-label">API Keys</div>
       <div class="settings-row"><span class="settings-key">Claude (Anthropic)</span><input class="settings-input" id="key-claude" type="password" placeholder="sk-ant-..."/></div>
       <div class="settings-row"><span class="settings-key">OpenAI</span><input class="settings-input" id="key-openai" type="password" placeholder="sk-..."/></div>
-      <div class="settings-row"><span class="settings-key">Grok (xAI)</span><input class="settings-input" id="key-grok" type="password" placeholder="xai-..."/></div>
       <div class="settings-row"><span class="settings-key">DeepSeek</span><input class="settings-input" id="key-deepseek" type="password" placeholder="sk-..."/></div>
+    </div>
+
+    <div class="settings-section">
+      <div class="settings-section-label">Grok — SuperGrok / X Premium+</div>
+      <div style="font-size:10px;color:var(--muted);margin-bottom:14px;line-height:1.6">
+        Connect your X account to use Grok via your existing SuperGrok or X Premium+ subscription — no separate API key needed.
+      </div>
+      <div class="settings-row" id="grok-oauth-row">
+        <span class="settings-key" id="grok-oauth-status">Checking...</span>
+        <button class="editor-btn primary" id="grok-oauth-btn" onclick="handleGrokOAuth()">Connect SuperGrok</button>
+      </div>
+      <div style="font-size:9px;color:var(--muted);margin-top:8px;line-height:1.5">
+        Requires XAI_CLIENT_ID — register your app at <span style="color:var(--yellow)">console.x.ai</span> → OAuth Apps.<br>
+        Or use an API key below as fallback.
+      </div>
+      <div class="settings-row" style="margin-top:10px"><span class="settings-key">Grok API key (fallback)</span><input class="settings-input" id="key-grok" type="password" placeholder="xai-..."/></div>
     </div>
 
     <div class="settings-section">
@@ -578,8 +593,57 @@ async function saveSettings() {
   addMessage('jacket', 'Settings saved.');
 }
 
-function openSettings() { document.getElementById('settings-overlay').classList.add('visible'); }
+function openSettings() {
+  document.getElementById('settings-overlay').classList.add('visible');
+  checkGrokOAuthStatus();
+}
 function closeSettings() { document.getElementById('settings-overlay').classList.remove('visible'); }
+
+// ── GROK OAUTH ──
+async function checkGrokOAuthStatus() {
+  try {
+    const { connected } = await fetch('/api/grok/oauth/status').then(r => r.json());
+    const statusEl = document.getElementById('grok-oauth-status');
+    const btnEl = document.getElementById('grok-oauth-btn');
+    if (connected) {
+      statusEl.innerHTML = '<span style="color:var(--yellow)">◆ SuperGrok connected</span>';
+      btnEl.textContent = 'Disconnect';
+      btnEl.classList.remove('primary');
+    } else {
+      statusEl.textContent = 'Not connected';
+      btnEl.textContent = 'Connect SuperGrok';
+      btnEl.classList.add('primary');
+    }
+  } catch {}
+}
+
+async function handleGrokOAuth() {
+  const { connected } = await fetch('/api/grok/oauth/status').then(r => r.json());
+  if (connected) {
+    await fetch('/api/grok/oauth/disconnect', { method: 'POST' });
+    checkGrokOAuthStatus();
+    return;
+  }
+  try {
+    const { url, error } = await fetch('/api/grok/oauth/start').then(r => r.json());
+    if (error) { addMessage('jacket', `OAuth error: ${error}`); return; }
+    // Open xAI consent screen in a new tab
+    window.open(url, '_blank', 'width=600,height=700');
+    addMessage('jacket', 'Opened xAI login. Authorize Jacket, then come back.');
+    // Poll for connection
+    const poll = setInterval(async () => {
+      const { connected } = await fetch('/api/grok/oauth/status').then(r => r.json());
+      if (connected) {
+        clearInterval(poll);
+        checkGrokOAuthStatus();
+        addMessage('jacket', 'SuperGrok connected. Select Grok as your provider.');
+      }
+    }, 2000);
+    setTimeout(() => clearInterval(poll), 5 * 60 * 1000); // stop polling after 5 min
+  } catch (e) {
+    addMessage('jacket', `OAuth failed: ${e.message}`);
+  }
+}
 
 // ── THREE.JS ──
 function initThree() {
